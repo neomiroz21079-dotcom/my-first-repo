@@ -1,12 +1,178 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>My First Website</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>המפל החי</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #071512;
+    }
+
+    .scene {
+      position: fixed;
+      inset: 0;
+      perspective: 1400px;
+      overflow: hidden;
+    }
+
+    .stage {
+      position: absolute;
+      inset: -7%;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    .layer {
+      position: absolute;
+      inset: 0;
+      will-change: transform;
+    }
+
+    .layer img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 55%;
+      display: block;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    /* Back layer: trees, rocks and sky with a soft wind */
+    .back img { filter: url(#wind); }
+
+    /* The waterfall column */
+    .fall {
+      clip-path: polygon(38% 16%, 60% 16%, 62% 67%, 36% 67%);
+      -webkit-mask-image: radial-gradient(ellipse 60% 75% at 50% 42%, #000 55%, transparent 100%);
+              mask-image: radial-gradient(ellipse 60% 75% at 50% 42%, #000 55%, transparent 100%);
+    }
+    .fall img { filter: url(#flow); }
+
+    /* The turquoise pool in front */
+    .water {
+      -webkit-mask-image: linear-gradient(to bottom, transparent 58%, #000 67%);
+              mask-image: linear-gradient(to bottom, transparent 58%, #000 67%);
+    }
+    .water img { filter: url(#ripple); }
+
+    /* Soft light and edges */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% 45%, rgba(255, 255, 240, 0.08), transparent 60%),
+        radial-gradient(ellipse at center, transparent 55%, rgba(3, 12, 10, 0.55) 100%);
+    }
+
+    .credit {
+      position: fixed;
+      bottom: 14px;
+      left: 16px;
+      direction: rtl;
+      font: 12px/1.4 system-ui, sans-serif;
+      color: rgba(255, 255, 255, 0.6);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
-  <h1>Hello World</h1>
-  <p>This is my first website.</p>
-  <p>I am learning Git.</p>
+
+  <!-- Moving water and wind filters -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="ripple" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence id="rippleNoise" type="fractalNoise" baseFrequency="0.012 0.045" numOctaves="2" seed="3" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="14" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="flow" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence id="flowNoise" type="fractalNoise" baseFrequency="0.06 0.008" numOctaves="2" seed="8" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="9" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="wind" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence id="windNoise" type="fractalNoise" baseFrequency="0.004 0.006" numOctaves="1" seed="5" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+
+  <div class="scene">
+    <div class="stage" id="stage">
+      <div class="layer back"  data-depth="0.6"><img src="waterfall.jpg" alt="מפל ובריכה בצבע טורקיז ביער"></div>
+      <div class="layer fall"  data-depth="0.8"><img src="waterfall.jpg" alt=""></div>
+      <div class="layer water" data-depth="1.25"><img src="waterfall.jpg" alt=""></div>
+    </div>
+  </div>
+
+  <div class="vignette"></div>
+  <div class="credit">צילום: Magnus D'Great M, Pexels</div>
+
+  <script>
+    const stage = document.getElementById('stage');
+    const layers = [...document.querySelectorAll('.layer')];
+    const rippleNoise = document.getElementById('rippleNoise');
+    const flowNoise = document.getElementById('flowNoise');
+    const windNoise = document.getElementById('windNoise');
+
+    // Where the camera wants to look (0 to 1), and where it looks now
+    let targetX = 0.5, targetY = 0.5;
+    let x = 0.5, y = 0.5;
+
+    window.addEventListener('pointermove', (e) => {
+      targetX = e.clientX / window.innerWidth;
+      targetY = e.clientY / window.innerHeight;
+    });
+
+    // On phones: follow the tilt of the device
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.gamma == null || e.beta == null) return;
+      targetX = Math.min(1, Math.max(0, 0.5 + e.gamma / 60));
+      targetY = Math.min(1, Math.max(0, 0.5 + (e.beta - 45) / 60));
+    });
+
+    let lastFilterUpdate = 0;
+
+    function frame(time) {
+      // Soft, trailing camera
+      x += (targetX - x) * 0.05;
+      y += (targetY - y) * 0.05;
+      const dx = x - 0.5;
+      const dy = y - 0.5;
+
+      stage.style.transform =
+        `rotateY(${dx * 8}deg) rotateX(${-dy * 6}deg)`;
+
+      for (const layer of layers) {
+        const depth = parseFloat(layer.dataset.depth);
+        layer.style.transform =
+          `translate3d(${-dx * 34 * depth}px, ${-dy * 22 * depth}px, 0)`;
+      }
+
+      // Water, waterfall and wind, updated about 30 times a second
+      if (time - lastFilterUpdate > 33) {
+        lastFilterUpdate = time;
+        const t = time / 1000;
+
+        const rx = 0.012 + Math.sin(t * 0.55) * 0.0018;
+        const ry = 0.045 + Math.cos(t * 0.40) * 0.0060;
+        rippleNoise.setAttribute('baseFrequency', `${rx.toFixed(5)} ${ry.toFixed(5)}`);
+
+        const fy = 0.008 + Math.sin(t * 1.30) * 0.0025;
+        flowNoise.setAttribute('baseFrequency', `0.06 ${fy.toFixed(5)}`);
+
+        const wx = 0.004 + Math.sin(t * 0.22) * 0.0009;
+        const wy = 0.006 + Math.cos(t * 0.17) * 0.0011;
+        windNoise.setAttribute('baseFrequency', `${wx.toFixed(5)} ${wy.toFixed(5)}`);
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+  </script>
 </body>
 </html>
